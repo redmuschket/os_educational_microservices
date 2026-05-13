@@ -1,0 +1,41 @@
+server {
+    listen 80;
+    server_name localhost _;
+    
+    # Корень сайта — ПРОВЕРЬ этот путь!
+    root /var/www/boardy;
+    index index.php index.html;
+    
+    # Логи
+    access_log /var/log/nginx/boardy-access.log;
+    error_log /var/log/nginx/boardy-error.log;
+    
+    # Статика — кэширование
+    location ~* \.(css|js|png|jpg|jpeg|gif|ico|svg)$ {
+        expires 7d;
+        add_header Cache-Control "public, no-transform";
+    }
+    
+    # PHP-FPM
+    location ~ \.php$ {
+        include fastcgi_params;
+        fastcgi_pass unix:/run/php/php8.3-fpm.sock;  
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+    }
+    
+    
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+   
+    location /phpmyadmin {
+        alias /usr/share/phpmyadmin;
+        index index.php;
+        
+        location ~ \.php$ {
+            include fastcgi_params;
+            fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+            fastcgi_param SCRIPT_FILENAME $request_filename;
+        }
+    }
+}
