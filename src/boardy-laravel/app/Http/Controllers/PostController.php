@@ -2,11 +2,10 @@
 
 namespace App\Http\Controllers;
 
-
-
 use App\Models\Post;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 
 class PostController extends Controller
 {
@@ -16,7 +15,7 @@ class PostController extends Controller
         $posts = Post::with('author')
             ->latest()
             ->paginate(10);
-        
+
         return view('posts.index', compact('posts'));
     }
 
@@ -40,19 +39,32 @@ class PostController extends Controller
 
         $post = $request->user()->posts()->create($data);
 
+        // ← Кирпичик 6: Вызов FastAPI broadcast
+        try {
+            Http::timeout(2)->post('http://localhost:8000/internal/broadcast', [
+                'id' => $post->id,
+                'title' => $post->title,
+                'body' => $post->body,
+                'author' => $request->user()->name,
+                'created_at' => $post->created_at->toISOString(),
+            ]);
+        } catch (\Exception $e) {
+            \Log::warning('WS broadcast failed: ' . $e->getMessage());
+        }
+
         return redirect()->route('posts.show', $post)
             ->with('success', 'Пост создан!');
     }
 
     public function edit(Post $post)
     {
-	$this->authorize('update', $post); 
+        $this->authorize('update', $post);
         return view('posts.edit', compact('post'));
     }
 
     public function update(Request $request, Post $post)
     {
-	$this->authorize('update', $post); 
+        $this->authorize('update', $post);
         $data = $request->validate([
             'title' => 'required|string|max:200',
             'body' => 'required|string|max:5000',
@@ -66,7 +78,7 @@ class PostController extends Controller
 
     public function destroy(Post $post)
     {
-	$this->authorize('update', $post); 
+        $this->authorize('update', $post);
         $post->delete();
 
         return redirect()->route('posts.index')
