@@ -8,6 +8,26 @@ expires 7d;
 
 add_header Cache-Control "public, no-transform";
 }
+
+location /phpmyadmin {
+
+alias /usr/share/phpmyadmin;
+
+index index.php;
+
+
+location ~ \.php$ {
+
+fastcgi_pass unix:/var/run/php/php-fpm.sock;
+
+include fastcgi_params;
+
+fastcgi_param SCRIPT_FILENAME $request_filename;
+
+}
+
+}
+
 location ~ \.php$ {
 
 fastcgi_pass unix:/var/run/php/php-fpm.sock;

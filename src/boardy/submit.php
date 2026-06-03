@@ -1,13 +1,54 @@
 <?php
 
-$name = $_POST['name'] ?? 'Аноним';
+require_once 'db.php';
+
+
+$name = $_POST['name'] ?? '';
 
 $message = $_POST['message'] ?? '';
 
 
-$line = date('Y-m-d H:i:s') . '|' . $name . '|' . $message . PHP_EOL;
+if ($name && $message) {
 
-file_put_contents('/var/www/boardy/data/messages.txt', $line, FILE_APPEND);
+// Ищем или создаём пользователя
+
+$stmt = $pdo->prepare('SELECT id FROM users WHERE name = ?');
+
+$stmt->execute([$name]);
+
+$user = $stmt->fetch();
+
+
+if (!$user) {
+
+$stmt = $pdo->prepare(
+
+'INSERT INTO users (name, email, password) VALUES (?, ?, ?)'
+
+);
+
+$stmt->execute([$name, $name.'@boardy.local', 'temp']);
+
+$user_id = $pdo->lastInsertId();
+
+} else {
+
+$user_id = $user['id'];
+
+}
+
+
+// Создаём пост (prepared statement!)
+
+$stmt = $pdo->prepare(
+
+'INSERT INTO posts (title, body, author_id) VALUES (?, ?, ?)'
+
+);
+
+$stmt->execute(['Сообщение', $message, $user_id]);
+
+}
 
 ?>
 
@@ -26,8 +67,6 @@ file_put_contents('/var/www/boardy/data/messages.txt', $line, FILE_APPEND);
 <main>
 
 <h2>Спасибо, <?= htmlspecialchars($name) ?>!</h2>
-
-<p>Ваше сообщение получено.</p>
 
 <p><a href="/">На главную</a> |
 
