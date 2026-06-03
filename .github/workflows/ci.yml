@@ -65,11 +65,11 @@ jobs:
           php-version: '8.3'
       
       - name: Install PHP deps
-        working-directory: ./src
+        working-directory: ./src/boardy-laravel
         run: composer install --no-interaction --prefer-dist
       
       - name: Run PHPUnit
-        working-directory: ./src
+        working-directory: ./src/boardy-laravel
         run: php artisan test --filter=HealthTest
       
       # Python/FastAPI
