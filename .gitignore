@@ -2,3 +2,5 @@
 src/boardy-laravel/vendor/
 src/boardy-laravel/node_modules/
 src/boardy-laravel/.env
+.env
+.env
