@@ -86,9 +86,9 @@ jobs:
       
       - name: Install Python deps
         run: |
-          pip install -r api/requirements.txt pytest
+          pip install -r boardy-api/requirements.txt pytest
           pip install "httpx<0.28.0"
       
       - name: Run pytest
-        working-directory: ./api
+        working-directory: ./boardy-api
         run: PYTHONPATH=/app pytest tests/test_health.py -v
