@@ -1,74 +1,51 @@
 <?php
-require_once 'db.php';
+function getPDO(): PDO {
+    $dsn = "mysql:host=localhost;dbname=boardy;charset=utf8mb4";
+    return new PDO($dsn, 'boardy', '9988', [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
+    ]);
+}
 
-$stmt = $pdo->query(
+session_set_cookie_params([
+    'lifetime' => 0, 
+	'path' => '/', 
+	'secure' => true,
+    'httponly' => true, 
+	'samesite' => 'Lax'
+]);
+session_start();
 
-'SELECT posts.body, users.name, posts.created_at
+$pdo = getPDO();
 
-FROM posts
+$stmt = $pdo->query('
+    SELECT p.id, p.body, p.created_at, u.name AS author_name
+    FROM posts p
+    JOIN users u ON p.author_id = u.id
+    ORDER BY p.created_at DESC
+');
+$posts = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-JOIN users ON posts.author_id = users.id
-
-ORDER BY posts.created_at DESC'
-
-);
-
-$messages = $stmt->fetchAll();
-
+include __DIR__ . '/partials/head.php';
+include __DIR__ . '/partials/nav.php';
 ?>
-
-<!DOCTYPE html>
-
-<html lang="ru">
-
-<head><meta charset="utf-8"><title>Boardy — Сообщения</title>
-
-<link rel="stylesheet" href="/css/style.css"></head>
-
-<body>
-
-<header><h1><a href="/">Boardy</a></h1></header>
-
 <main>
-
-<h2>Все сообщения</h2>
-
-<?php if (empty($messages)): ?>
-
-<p>Сообщений пока нет.</p>
-
-<?php else: ?>
-
-<table border="1" cellpadding="8"
-
-style="border-collapse:collapse;width:100%">
-
-<tr><th>Дата</th><th>Автор</th><th>Сообщение</th></tr>
-
-<?php foreach ($messages as $msg): ?>
-
-<tr>
-
-<td><?= htmlspecialchars($msg['created_at']) ?></td>
-
-<td><?= htmlspecialchars($msg['name']) ?></td>
-
-<td><?= htmlspecialchars($msg['body']) ?></td>
-
-</tr>
-
-<?php endforeach; ?>
-
-</table>
-
-<?php endif; ?>
-
-<p style="margin-top:20px">
-
-<a href="/feedback.html">Написать</a> |
-
-<a href="/">На главную</a></p>
-
+  <h1>Все посты</h1>
+  <?php if (empty($posts)): ?>
+    <p>Постов пока нет. <a href="/submit.php">Добавьте первый!</a></p>
+  <?php else: ?>
+    <?php foreach ($posts as $post): ?>
+      <article style="background:white; padding:1rem; margin:1rem 0; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+        <p><?= nl2br(htmlspecialchars($post['body'])) ?></p>
+        <small>
+          Автор: <strong><?= htmlspecialchars($post['author_name']) ?></strong> • 
+          <?= htmlspecialchars($post['created_at']) ?>
+        </small>
+      </article>
+    <?php endforeach; ?>
+  <?php endif; ?>
+  <?php if (!empty($_SESSION['user_id'])): ?>
+    <p><a href="/submit.php">+ Добавить пост</a></p>
+  <?php endif; ?>
 </main>
-
-</body></html>
+<?php include __DIR__ . '/partials/foot.php'; ?>
