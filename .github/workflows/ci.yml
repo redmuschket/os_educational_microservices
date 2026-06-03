@@ -67,6 +67,12 @@ jobs:
       - name: Install PHP deps
         working-directory: ./src/boardy-laravel
         run: composer install --no-interaction --prefer-dist
+
+      - name: Set up Laravel Environment
+        working-directory: ./src/boardy-laravel
+        run: |
+          cp .env.example .env
+          php artisan key:generate      
       
       - name: Run PHPUnit
         working-directory: ./src/boardy-laravel
