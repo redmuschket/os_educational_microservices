@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+
+
 use App\Models\Post;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Redis; 
 
 class PostController extends Controller
 {
@@ -15,13 +17,13 @@ class PostController extends Controller
         $posts = Post::with('author')
             ->latest()
             ->paginate(10);
-
+        
         return view('posts.index', compact('posts'));
     }
 
     public function show(Post $post)
     {
-        $post->load('author', 'comments.author');
+        $post->load('author');
         return view('posts.show', compact('post'));
     }
 
@@ -32,39 +34,35 @@ class PostController extends Controller
 
     public function store(Request $request)
     {
-        $data = $request->validate([
+	$validated = $request->validate([
             'title' => 'required|string|max:200',
             'body' => 'required|string|max:5000',
         ]);
 
-        $post = $request->user()->posts()->create($data);
+    	$post = $request->user()->posts()->create($validated);
 
-        // ← Кирпичик 6: Вызов FastAPI broadcast
-        try {
-            Http::timeout(2)->post('http://localhost:8000/internal/broadcast', [
-                'id' => $post->id,
-                'title' => $post->title,
-                'body' => $post->body,
-                'author' => $request->user()->name,
-                'created_at' => $post->created_at->toISOString(),
-            ]);
-        } catch (\Exception $e) {
-            \Log::warning('WS broadcast failed: ' . $e->getMessage());
-        }
+    	Redis::publish('new_post', json_encode([
+            'id' => $post->id,
+            'title' => $post->title,
+            'body' => $post->body,
+            'author_id' => auth()->id(),
+            'author_name' => auth()->user()->name,
+            'created_at' => $post->created_at->toISOString(),
+        ]));
 
-        return redirect()->route('posts.show', $post)
-            ->with('success', 'Пост создан!');
+    	return redirect()->route('posts.show', $post)
+        	->with('success', 'Пост создан!');
     }
 
     public function edit(Post $post)
     {
-        $this->authorize('update', $post);
+	$this->authorize('update', $post); 
         return view('posts.edit', compact('post'));
     }
 
     public function update(Request $request, Post $post)
     {
-        $this->authorize('update', $post);
+	$this->authorize('update', $post); 
         $data = $request->validate([
             'title' => 'required|string|max:200',
             'body' => 'required|string|max:5000',
@@ -78,7 +76,7 @@ class PostController extends Controller
 
     public function destroy(Post $post)
     {
-        $this->authorize('update', $post);
+	$this->authorize('update', $post); 
         $post->delete();
 
         return redirect()->route('posts.index')

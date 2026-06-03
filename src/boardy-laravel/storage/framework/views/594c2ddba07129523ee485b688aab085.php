@@ -1,44 +1,45 @@
-@extends('layouts.app')
+<?php $__env->startSection('title', 'Лента постов'); ?>
 
-@section('title', 'Лента постов')
-
-@section('content')
+<?php $__env->startSection('content'); ?>
     <h1 class="mb-4">Лента постов</h1>
 
     <!-- Кирпичик 7: Контейнер с id для WebSocket-обновлений -->
     <div id="posts-feed">
-    @forelse ($posts as $post)
+    <?php $__empty_1 = true; $__currentLoopData = $posts; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $post): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
         <article class="card mb-3">
             <div class="card-body">
                 <h3 class="card-title">
-                    <a href="{{ route('posts.show', $post) }}" class="text-decoration-none text-dark">
-                        {{ $post->title }}
+                    <a href="<?php echo e(route('posts.show', $post)); ?>" class="text-decoration-none text-dark">
+                        <?php echo e($post->title); ?>
+
                     </a>
                 </h3>
                 <h6 class="card-subtitle mb-2 text-muted">
-                    Автор: {{ $post->author->name }} •
-                    {{ $post->created_at->format('d.m.Y H:i') }}
+                    Автор: <?php echo e($post->author->name); ?> •
+                    <?php echo e($post->created_at->format('d.m.Y H:i')); ?>
+
                 </h6>
-                <p class="card-text">{{ Str::limit($post->body, 200) }}</p>
-                <a href="{{ route('posts.show', $post) }}" class="btn btn-sm btn-outline-primary">Читать далее</a>
+                <p class="card-text"><?php echo e(Str::limit($post->body, 200)); ?></p>
+                <a href="<?php echo e(route('posts.show', $post)); ?>" class="btn btn-sm btn-outline-primary">Читать далее</a>
             </div>
         </article>
-    @empty
+    <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
         <div class="alert alert-info">
             Постов пока нет.
         </div>
-    @endforelse
+    <?php endif; ?>
     </div>
 
     <!-- Ссылки пагинации -->
     <div class="d-flex justify-content-center mt-4">
-        {{ $posts->links() }}
+        <?php echo e($posts->links()); ?>
+
     </div>
-@endsection
+<?php $__env->stopSection(); ?>
 
 <!-- Кирпичик 8: WebSocket-клиент (вставлен напрямую) -->
 <script>
-const wsUrl = '{{ app()->environment("production") ? "wss://api." . config("app.fastapi_domain") . "/ws" : "ws://localhost:8000/ws" }}';
+const wsUrl = '<?php echo e(app()->environment("production") ? "wss://api." . config("app.fastapi_domain") . "/ws" : "ws://localhost:8000/ws"); ?>';
 
 function connect() {
     const ws = new WebSocket(wsUrl);
@@ -87,3 +88,5 @@ function escapeHtml(str) {
 
 document.addEventListener('DOMContentLoaded', connect);
 </script>
+
+<?php echo $__env->make('layouts.app', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?><?php /**PATH /home/student/boardy/src/boardy-laravel/resources/views/posts/index.blade.php ENDPATH**/ ?>

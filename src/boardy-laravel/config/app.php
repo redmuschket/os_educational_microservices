@@ -53,7 +53,7 @@ return [
     */
 
     'url' => env('APP_URL', 'http://localhost'),
-
+    'fastapi_domain' => env('FASTAPI_DOMAIN', 'localhost'),
     /*
     |--------------------------------------------------------------------------
     | Application Timezone
