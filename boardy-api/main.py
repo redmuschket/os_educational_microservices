@@ -138,3 +138,8 @@ async def update_comments_author_name(user_id: int, new_name: str):
             print(f"✅ Updated comments for user {user_id} to {new_name}")
     finally:
         await conn.ensure_closed()
+
+@app.get("/health")
+def health():
+    """Health check endpoint for CI/CD"""
+    return {"ok": True, "service": "fastapi"}

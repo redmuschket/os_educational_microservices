@@ -1,3 +1,4 @@
+import os
 import jwt
 from jwt import PyJWKClient
 from fastapi import Header, HTTPException, status
@@ -7,13 +8,13 @@ from typing import Optional
 
 # Загрузка публичного ключа Laravel Passport (RS256)
 def load_public_key():
-    with open('/opt/boardy-api/oauth-public.key', 'rb') as f:
-        public_key_bytes = f.read()
-    return serialization.load_pem_public_key(
-        public_key_bytes,
-        backend=default_backend()
-    )
-
+    key_path = os.getenv("OAUTH_PUBLIC_KEY", "/app/oauth-public.key")
+    try:
+        with open(key_path, "rb") as f:
+            return f.read()
+    except FileNotFoundError:
+        # Если ключа нет (не запущен passport), возвращаем заглушку, чтобы сервис не падал
+        return b"dummy-key-for-lab"
 PUBLIC_KEY = load_public_key()
 
 async def get_current_user(authorization: Optional[str] = Header(None)) -> dict:

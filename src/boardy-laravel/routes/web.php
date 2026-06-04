@@ -28,3 +28,7 @@ Route::get('auth/github', [App\Http\Controllers\GitHubController::class, 'redire
 Route::get('auth/github/callback', [App\Http\Controllers\GitHubController::class, 'callback']);
 // Подключаем маршруты аутентификации от Breeze
 require __DIR__.'/auth.php';
+
+// Health check for CI/CD
+Route::get('/health-laravel', fn () => response()->json(['ok' => true, 'service' => 'laravel']));
+
