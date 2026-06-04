@@ -1,0 +1,10 @@
+version: '3.8'
+services:
+  laravel:
+    build:
+      context: ./src/boardy-laravel
+      dockerfile: Dockerfile
+  fastapi:
+    build:
+      context: ./boardy-api
+      dockerfile: Dockerfile
