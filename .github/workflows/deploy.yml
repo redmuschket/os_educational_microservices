@@ -128,8 +128,6 @@ jobs:
           tags: |
             ${{ env.IMAGE_PREFIX }}-php:${{ github.sha }}
             ${{ env.IMAGE_PREFIX }}-php:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
       
       - name: Build & push FastAPI image
         uses: docker/build-push-action@v5
@@ -139,8 +137,6 @@ jobs:
           tags: |
             ${{ env.IMAGE_PREFIX }}-api:${{ github.sha }}
             ${{ env.IMAGE_PREFIX }}-api:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
   # === ДЕПЛОЙ НА СЕРВЕР ЧЕРЕЗ SSH ===
   deploy:
