@@ -42,7 +42,8 @@ jobs:
           EOF
           mkdir -p src/boardy-laravel
           cp .env src/boardy-laravel/.env
-      
+          mkdir -p src/boardy-laravel
+          cp .env src/boardy-laravel/.env      
       - name: Build images
         run: docker compose build
       
