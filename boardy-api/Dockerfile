@@ -12,10 +12,10 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Явно копируем ВСЕ необходимые файлы
-COPY main.py .
-COPY database.py .
-COPY auth.py .
-COPY routers/ ./routers/
+COPY app/main.py .
+COPY app/database.py .
+COPY app/auth.py .
+COPY app/routers/ ./routers/
 
 EXPOSE 8000
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
