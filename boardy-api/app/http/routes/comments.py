@@ -9,22 +9,8 @@ router = APIRouter()
 @router.get('/posts/{post_id}/comments')
 async def get_comments(post_id: int):
     """Публичный эндпоинт - чтение комментариев"""
-    conn = await get_db()
-    async with conn.cursor(aiomysql.DictCursor) as cur:
-        await cur.execute(
-            'SELECT c.id, c.body, c.created_at, u.name AS author_name '
-            'FROM comments c '
-            'JOIN users u ON c.author_id = u.id '
-            'WHERE c.post_id = %s '
-            'ORDER BY c.created_at DESC',
-            (post_id,)
-        )
-        items = await cur.fetchall()
-        conn.close()
-        for item in items:
-            if item.get('created_at'):
-                item['created_at'] = str(item['created_at'])
-        return {'items': items, 'count': len(items)}
+
+    return {'items': items, 'count': len(items)}
 
 @router.post('/posts/{post_id}/comments', status_code=201)
 async def create_comment(
