@@ -6,13 +6,6 @@ from auth import get_current_user
 
 router = APIRouter()
 
-class CommentCreate(BaseModel):
-    body: str
-    author_name: str  # Оставляем для curl, но в БД не пишем
-
-class CommentUpdate(BaseModel):
-    body: str
-
 @router.get('/posts/{post_id}/comments')
 async def get_comments(post_id: int):
     """Публичный эндпоинт - чтение комментариев"""
