@@ -81,7 +81,6 @@ class RepositoryService:
             await conn.commit()
         except Exception as e:
             logger.error(f"Failed to commit transaction: {e}")
-            await self.rollback_transaction(conn)
             raise TransactionError(f"Failed to commit transaction: {e}") from e
 
     async def rollback_transaction(self, conn: aiomysql.Connection) -> None:
