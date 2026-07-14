@@ -12,8 +12,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Явно копируем ВСЕ необходимые файлы
-COPY app/main.py .
-COPY app/database.py .
+COPY main.py .
+COPY core/database.py .
 COPY app/auth.py .
 COPY app/http/routers/ ./routers/
 

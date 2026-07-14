@@ -1,4 +1,3 @@
-import time
 import logging
 import asyncio
 from functools import wraps
@@ -8,11 +7,7 @@ logger = logging.getLogger(__name__)
 
 def transaction(commit: bool = True, rollback_on_error: bool = True):
     """
-    A decorator to override transaction behaviour at the method level.
-
-    Args:
-        commit: whether to commit after successful execution
-        rollback_on_error: whether to rollback on exception (ignored if commit=False)
+    Method-level decorator to override transaction behaviour for a specific method.
     """
     def decorator(func):
         func._tx_commit = commit
@@ -23,38 +18,50 @@ def transaction(commit: bool = True, rollback_on_error: bool = True):
 
 def _transaction_method(func, commit_default, rollback_default):
     """
-    Internal wrapper that adds transaction control (commit/rollback) to an async method.
+    Internal wrapper that adds transaction control using the repository.
+    The repository must be available as self._repository (or self._repository_service)
+    and implement begin_transaction(), commit_transaction(), rollback_transaction().
     """
     # Read method‑specific overrides, fall back to class defaults
     commit = getattr(func, '_tx_commit', commit_default)
     rollback_on_error = getattr(func, '_tx_rollback_on_error', rollback_default)
-    # If we never commit, rollback makes no sense
     if not commit:
         rollback_on_error = False
 
     @wraps(func)
     async def async_wrapper(*args, **kwargs):
-        # First argument is always 'self' (the class instance)
         self_obj = args[0] if args else None
         if not self_obj:
             raise ValueError("Method must be called on an instance of the class")
 
-        # Ensure the instance implements the required transaction methods
-        if not hasattr(self_obj, '_commit') or not hasattr(self_obj, '_rollback'):
+        # Locate the repository (try common attribute names)
+        repo = getattr(self_obj, '_repository', None)
+        if repo is None:
+            repo = getattr(self_obj, '_repository_service', None)
+        if repo is None:
             raise AttributeError(
-                f"Class {self_obj.__class__.__name__} must implement _commit and _rollback"
+                f"Class {self_obj.__class__.__name__} must have _repository or _repository_service"
             )
+
+        # Verify that the repository has the required transaction methods
+        if not hasattr(repo, 'begin_transaction') or not hasattr(repo, 'commit_transaction'):
+            raise AttributeError(
+                f"Repository {repo.__class__.__name__} must implement begin_transaction, commit_transaction, rollback_transaction"
+            )
+
+        # Start transaction (the repository itself manages the connection)
+        await repo.begin_transaction()
 
         try:
             result = await func(*args, **kwargs)
             if commit:
-                await self_obj._commit()
+                await repo.commit_transaction()
             return result
         except Exception as e:
             if commit and rollback_on_error:
-                await self_obj._rollback()
+                await repo.rollback_transaction()
                 logger.info(f"ROLLBACK for {func.__qualname__}")
-            raise   # re‑raise the exception after handling
+            raise
 
     return async_wrapper
 
@@ -66,12 +73,10 @@ def transactional_class(
 ):
     """
     Class decorator that wraps all public (and optionally private) async methods
-    with transaction management (commit/rollback).
+    with transaction management using the repository.
 
-    Args:
-        commit_default: default commit behaviour for all methods
-        rollback_default: default rollback‑on‑error behaviour
-        exclude_private: if True, methods starting with '_' are not wrapped
+    The class must have an attribute '_repository' (or '_repository_service')
+    that provides begin_transaction(), commit_transaction(), rollback_transaction().
     """
     def decorator(cls):
         for attr_name, attr_value in cls.__dict__.items():

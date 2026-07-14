@@ -17,8 +17,10 @@ class RepositoryService:
 
     def __init__(self, pool: aiomysql.Pool):
         self._pool = pool
+        self._current_conn: Optional[aiomysql.Connection] = None
 
-    async def _execute_with_handling(self, coro, error_context: str = ""):
+    @staticmethod
+    async def _execute_with_handling(coro, error_context: str = ""):
         """Performs a coroutine with general database error handling."""
         try:
             return await coro
@@ -32,6 +34,12 @@ class RepositoryService:
             logger.error(f"Unexpected error {error_context}: {e}")
             raise ServiceRepositoryError(f"Unknown error: {e}") from e
 
+    async def begin_transaction(self) -> None:
+        """Start a transaction: get a connection and save."""
+        if self._current_conn is not None:
+            raise RuntimeError("Transaction already started")
+        self._current_conn = await self._pool.acquire()
+
     @asynccontextmanager
     async def get_connection(self):
         """Get a connection from the pool with automatic closing."""
@@ -41,6 +49,40 @@ class RepositoryService:
         finally:
             await self._pool.release(conn)
 
+    async def commit_transaction(self) -> None:
+        conn = self._current_conn
+        if conn is None:
+            raise RuntimeError("No active transaction")
+
+        try:
+            await conn.commit()
+        except Exception:
+            await self._pool.release(conn)
+            self._current_conn = None
+            logger.error(f"Failed to commit transaction: {e}")
+            raise TransactionError(f"Failed to commit transaction: {e}") from e
+        else:
+            await self._pool.release(conn)
+            self._current_conn = None
+
+    async def rollback_transaction(self) -> None:
+        """Roll back the transaction + liberation."""
+        conn = self._current_conn
+        if conn is None:
+            logger.warning("rollback_transaction called with no active connection")
+            return
+
+        try:
+            await conn.rollback()
+        except Exception as e:
+            await self._pool.release(conn)
+            self._current_conn = None
+            logger.error(f"Failed to rollback transaction: {e}")
+            raise TransactionError(f"Failed to rollback transaction: {e}") from e
+        else:
+            await self._pool.release(conn)
+            self._current_conn = None
+
     async def select(
         self,
         query: str,
@@ -48,50 +90,43 @@ class RepositoryService:
         fetch_one: bool = False,
         fetch_all: bool = False,
         dict_cursor: bool = False,
+        conn: Optional[aiomysql.Connection] = None,
     ) -> Any:
         """Execute a request with error handling.
         - fetch_one=True will return one record (or None)
         - fetch_all=True returns a list of entries
         - otherwise it will return the cursor (for INSERT/UPDATE/DELETE)
         """
-        try:
-            async with self.get_connection() as conn:
-                cursor_class = aiomysql.DictCursor if dict_cursor else aiomysql.Cursor
-                async with conn.cursor(cursor_class) as cur:
-                    await self._execute_with_handling(
-                        cur.execute(query, params or ()),
-                        error_context=f"query: {query[:100]}"
-                    )
-                    if fetch_one:
-                        return await cur.fetchone()
-                    elif fetch_all:
-                        return await cur.fetchall()
-                    else:
-                        return cur
-        except aiomysql.Error as e:
-            logger.error(f"Database error (connection): {e}, query: {query[:100]}")
-            raise DatabaseError(f"Database connection error: {e}") from e
-        except Exception as e:
-            logger.error(f"Unexpected error (connection): {e}, query: {query[:100]}")
-            raise
+        if not query:
+            raise RepositoryInputError("Query cannot be empty")
 
-    async def commit_transaction(self, conn: aiomysql.Connection) -> None:
-        """Commit the transaction."""
-        try:
-            await conn.commit()
-        except Exception as e:
-            logger.error(f"Failed to commit transaction: {e}")
-            raise TransactionError(f"Failed to commit transaction: {e}") from e
+        actual_conn = conn or self._current_conn
+        if actual_conn is None:
+            async with self.get_connection() as new_conn:
+                return await self._execute_select(query, params, fetch_one, fetch_all, dict_cursor, new_conn)
+        else:
+            return await self._execute_select(query, params, fetch_one, fetch_all, dict_cursor, actual_conn)
 
-    async def rollback_transaction(self, conn: aiomysql.Connection) -> None:
-        """Roll back the transaction."""
-        try:
-            await conn.rollback()
-        except Exception as e:
-            logger.error(f"Failed to rollback transaction: {e}")
+    @staticmethod
+    async def _execute_select(query, params, fetch_one, fetch_all, dict_cursor, connection):
+        cursor_class = aiomysql.DictCursor if dict_cursor else aiomysql.Cursor
+        async with connection.cursor(cursor_class) as cur:
+            await RepositoryService._execute_with_handling(
+                cur.execute(query, params or ()),
+                error_context=f"query: {query[:100]}"
+            )
+            if fetch_one:
+                return await cur.fetchone()
+            elif fetch_all:
+                return await cur.fetchall()
+            else:
+                return cur
 
     async def insert_one(
-        self, table: str, data: dict[str, Any], conn: Optional[aiomysql.Connection] = None
+        self,
+        table: str,
+        data: dict[str, Any],
+        conn: Optional[aiomysql.Connection] = None
     ) -> int:
         """Insert one record and return its ID."""
 
@@ -104,22 +139,28 @@ class RepositoryService:
         placeholders = ', '.join(['%s'] * len(data))
         query = f"INSERT INTO {table} ({columns}) VALUES ({placeholders})"
 
-        async def _do_insert(connection):
-            async with connection.cursor() as cur:
-                await self._execute_with_handling(
-                    cur.execute(query, list(data.values())),
-                    error_context=f"insert into {table}"
-                )
-                return cur.lastrowid
-
-        if conn:
-            return await _do_insert(conn)
+        actual_conn = conn or self._current_conn
+        if actual_conn is None:
+            async with self.get_connection() as new_conn:
+                return await self._execute_insert(table, data, query, new_conn)
         else:
-            async with self.get_connection() as conn:
-                return await _do_insert(conn)
+            return await self._execute_insert(table, data, query, actual_conn)
+
+    @staticmethod
+    async def _execute_insert(table, data, query, connection):
+        async with connection.cursor() as cur:
+            await RepositoryService._execute_with_handling(
+                cur.execute(query, list(data.values())),
+                error_context=f"insert into {table}"
+            )
+            return cur.lastrowid
 
     async def update_one(
-        self, table: str, id_column: str, id_value: Any, data: dict[str, Any],
+        self,
+        table: str,
+        id_column: str,
+        id_value: Any,
+        data: dict[str, Any],
         conn: Optional[aiomysql.Connection] = None
     ) -> bool:
         """Update the record by ID."""
@@ -133,22 +174,27 @@ class RepositoryService:
         query = f"UPDATE {table} SET {set_clause} WHERE {id_column} = %s"
         params = list(data.values()) + [id_value]
 
-        async def _do_update(connection):
-            async with connection.cursor() as cur:
-                await self._execute_with_handling(
-                    cur.execute(query, params),
-                    error_context=f"update {table} where {id_column}={id_value}"
-                )
-                return cur.rowcount > 0
-
-        if conn:
-            return await _do_update(conn)
+        actual_conn = conn or self._current_conn
+        if actual_conn is None:
+            async with self.get_connection() as new_conn:
+                return await self._execute_update(table, params, query, id_column, id_value, new_conn)
         else:
-            async with self.get_connection() as conn:
-                return await _do_update(conn)
+            return await self._execute_update(table, params, query, id_column, id_value, actual_conn)
+
+    @staticmethod
+    async def _execute_update(table, params, query, id_column, id_value, connection):
+        async with connection.cursor() as cur:
+            await RepositoryService._execute_with_handling(
+                cur.execute(query, params),
+                error_context=f"update {table} where {id_column}={id_value}"
+            )
+            return cur.rowcount > 0
 
     async def delete_one(
-        self, table: str, id_column: str, id_value: Any,
+        self,
+        table: str,
+        id_column: str,
+        id_value: Any,
         conn: Optional[aiomysql.Connection] = None
     ) -> bool:
         """Delete an entry by ID."""
@@ -157,16 +203,18 @@ class RepositoryService:
 
         query = f"DELETE FROM {table} WHERE {id_column} = %s"
 
-        async def _do_delete(connection):
-            async with connection.cursor() as cur:
-                await self._execute_with_handling(
-                    cur.execute(query, (id_value,)),
-                    error_context=f"delete from {table} where {id_column}={id_value}"
-                )
-                return cur.rowcount > 0
-
-        if conn:
-            return await _do_delete(conn)
+        actual_conn = conn or self._current_conn
+        if actual_conn is None:
+            async with self.get_connection() as new_conn:
+                return await self._execute_delete(table, query, id_column, id_value, new_conn)
         else:
-            async with self.get_connection() as conn:
-                return await _do_delete(conn)
+            return await self._execute_delete(table, query, id_column, id_value, actual_conn)
+
+    @staticmethod
+    async def _execute_delete(table, query, id_column, id_value, connection):
+        async with connection.cursor() as cur:
+            await RepositoryService._execute_with_handling(
+                cur.execute(query, (id_value,)),
+                error_context=f"delete from {table} where {id_column}={id_value}"
+            )
+            return cur.rowcount > 0

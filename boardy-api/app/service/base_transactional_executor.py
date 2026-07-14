@@ -15,16 +15,5 @@ class BaseTransactionalExecutor(ABC, Generic[R]):
     with support for transactions, runtime logging, and error handling.
     """
 
-    def __init__(self, repository: R, error_class: Type[Exception]):
+    def __init__(self, repository: R):
         self.repository = repository
-        self._error_class = error_class
-
-    @abstractmethod
-    async def _commit(self) -> None:
-        """Committing a transaction to a specific repository."""
-        pass
-
-    @abstractmethod
-    async def _rollback(self) -> None:
-        """Rollback of a transaction in a specific repository."""
-        pass
