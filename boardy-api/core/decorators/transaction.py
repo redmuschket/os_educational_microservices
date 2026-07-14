@@ -35,9 +35,7 @@ def _transaction_method(func, commit_default, rollback_default):
             raise ValueError("Method must be called on an instance of the class")
 
         # Locate the repository (try common attribute names)
-        repo = getattr(self_obj, '_repository', None)
-        if repo is None:
-            repo = getattr(self_obj, '_repository_service', None)
+        repo = getattr(self_obj, 'repository', None)
         if repo is None:
             raise AttributeError(
                 f"Class {self_obj.__class__.__name__} must have _repository or _repository_service"
